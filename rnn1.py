@@ -31,9 +31,10 @@ features = data.columns
 best_sofar = 0
 init = False
 trial = saved_trial_parameters_so_far()
-h_layer_range = 7
+h_layer_range = 6
 
 epsilon_parameters = {'btc': [],
+                      'recurrent2': [],
                       'feature': [],
                       'output_nodes': [],
                       'period': [],
@@ -58,6 +59,7 @@ for i in range(h_layer_range+1):
     epsilon_parameters[f'dropout_{i}'] = []
 
 while 1:
+    '''
     output = outputs[random_int(0, 1)] if random_float(0,1)>0.5 else recommend('output', epsilon_parameters) if init else 'linear'
     output_nodes = 1 if output == 'linear' else random_int(2, 3) if init else 2
     learning_rate = random_float(0.01, 0.001) if random_float(0,1)>0.1 else recommend('learning_rate', epsilon_parameters) if init else 0.01
@@ -70,6 +72,19 @@ while 1:
     batch_size = (random_int(8, 128) if random_float(0, 1)>0.5 else recommend('batch_size', epsilon_parameters)) if init else 64
     activation1 = ['lstm', 'bi-lstm', 'gru'][random_int(0, 2)]
     activation = rand_activation()
+    '''
+    output = outputs[random_int(0, 1)] if init else 'linear'
+    output_nodes = 1 if output == 'linear' else random_int(2, 3) if init else 2
+    #learning_rate = random_float(0.01, 0.001) if random_float(0,1)>0.1 else recommend('learning_rate', epsilon_parameters) if init else 0.01
+    period = random_int(10, 100) if init else 100
+    feature = features[random_int(0, len(features)-1)] if random_int(0, len(features) - 1) == 0 else 'None'
+    percentage = random_float(0.1, 0.9) if random_float(0, 1)>0.2 else recommend('percentage', epsilon_parameters) if init else 0.5
+    l1f = random_float(0, 0.2) if random_float(0, 1)>0.2 else recommend(f'l1_{0}', epsilon_parameters) if init else 0.2
+    neurons1 = random_int(100, 600) if random_float(0, 1)>0.2 else recommend(f'neurons_{0}', epsilon_parameters) if init else 30
+    n_layers = random_int(2,h_layer_range) if init else 1
+    batch_size = random_int(8, 128) if init else 64
+    activation1 = ['lstm', 'bi-lstm', 'gru'][random_int(0, 2)]
+    activation = rand_activation()
 
     '''Overwriters'''
     l1f = 0
@@ -77,6 +92,7 @@ while 1:
     learning_rate = 'None'
     dropout = 0
     neurons = 500
+    neurons1 = 400
     activation = ['relu', 'sigmoid', 'tanh'][random_int(0, 2)]
 
     data, target, kline_interval, normaliser = generate_features(output, output_nodes)
@@ -87,6 +103,11 @@ while 1:
     X_train, X_test, y_train, y_test = train_test_split(data, target, test_size=0.2, shuffle=False)
     model = tf.keras.Sequential()
     model.add(layer_one(activation1, l1f, X_test.shape[1], X_test.shape[2], neurons1))
+    if random_float(0, 1) > 0.5:
+        epsilon_parameters['recurrent2'].append(True)
+        model.add(hidden_layer(activation1, l1f, neurons))
+    else:
+        epsilon_parameters['recurrent2'].append(False)
 
     for i in range(n_layers):
         #neurons = random_int(30,700)
@@ -109,7 +130,7 @@ while 1:
         loss=['mean_squared_error', 'mean_absolute_error'][random_int(0, 1)]
     metric = ['val_loss']
 
-    optimizer, str_opt = rand_optimizer(selection=('Rand'if random_float(0, 1)>0.7 else recommend('optimizer', epsilon_parameters)) if init else 'Rand')
+    optimizer, str_opt = rand_optimizer(selection=('Rand'))
     early_stop = tf.keras.callbacks.EarlyStopping(monitor=metric[0], patience=5)
     #lr_schedule = tf.keras.callbacks.LearningRateScheduler(lambda epoch: learning / (1 + epoch * 0.02))
     #lr_schedule = tf.keras.callbacks.LearningRateScheduler(lambda epoch: 0.9)
@@ -173,8 +194,9 @@ while 1:
     epsilon_parameters['buy_acc'].append(buy_dict)
     epsilon_parameters['sell_acc'].append(sell_dict)
     epsilon_parameters['hold_acc'].append(hold_dict)
-    
+
     trial_parameters[f'trial{trial}'] = {'btc': epsilon_parameters['btc'][-1],
+                                         'recurrent2': epsilon_parameters['recurrent2'][-1],
                                          'accuracy': epsilon_parameters['accuracy'][-1],
                                          'buy_acc': epsilon_parameters['buy_acc'][-1],
                                          'sell_acc': epsilon_parameters['sell_acc'][-1],
@@ -210,5 +232,4 @@ while 1:
     #    telegram_thread = threading.Thread(target=telegram_thread)
     #    telegram_thread.start()
     init = True
-
 

@@ -89,10 +89,16 @@ def test_model_on_last_months_data(model, trial):
             index_of_max = np.argmax(output)
             prediction = np.zeros(output.shape)
             prediction[0, index_of_max] = 1
-            predictions.append(prediction)
+            if np.all(output == [1, 0, 0]).all() or np.all(output == [1, 0]).all():
+                prediction = 'buy'
+            else:
+                prediction = 'sell'
         else:
-            predictions.append(output)
-            prediction = output
+            if output > 1:
+                prediction = 'buy'
+            else:
+                prediction = 'sell'
+        predictions.append(prediction)
 
         confusion_matrix = confusion_matrix_logic(label, prediction, confusion_matrix)
         counter += 1
@@ -115,19 +121,14 @@ def test_model_on_last_months_data(model, trial):
 def plot_data(predictions, trial):
     reference_data = pd.read_csv('generated_data/last_month_raw_data.csv')
 
-    cross_over_index, ref = cross_over_1(predictions)
+    cross_over_index = change_points(predictions)
+    ref = predictions[0]
     x, y = reference_data['timestamp'].to_list(), reference_data['close'].to_list()
     x2, y2 = reference_data['timestamp'].to_list(), predictions
     x2, y2 = get_data_at_cross_over_points(x2, y2, cross_over_index)
 
     btc = calculate_btc_after_test_period(cross_over_index, ref, y2)
-
-    if ref.shape[1] == 1:
-        buy = True if ref > 1 else False
-    if ref.shape[1] == 2:
-        buy = True if np.all(ref == [1, 0]) else False
-    if ref.shape[1] == 3:
-        buy = True if np.all(ref == [1, 0, 0]) else False
+    buy = True if ref == 'buy' else False
 
     plt.clf()
     for line in x2:
@@ -144,14 +145,13 @@ def plot_data(predictions, trial):
 
 
 def calculate_btc_after_test_period(idx, ref, y2):
-    if ref.shape[1] > 1:
-        ref = True if np.all(ref == [1, 0, 0]).all() or np.all(ref == [1, 0]).all() else False
-    else:
-        ref = True if ref > 1 else False
-    btc = 1 if not ref else 0
+
+    btc = 1 if ref == 'buy' else 0
     dollar_val_df = pd.read_csv('generated_data/last_month_raw_data.csv')['close']
     dollar_val = dollar_val_df[0]
     dollars = 0 if btc else dollar_val_df[0]
+
+    ref = False if btc else True
 
     for i, y in enumerate(y2):
 
@@ -174,44 +174,22 @@ def get_data_at_cross_over_points(x, y, indexs):
     return x1, y1
 
 
-def cross_over_1(lst):
-    crosses = []
-    ref = lst[0]
-    if ref.shape[1] == 1:
-        for idx in range(len(lst)):
-            if lst[idx] > 1 and ref <= 1:
-                crosses.append(idx)
-                ref = lst[idx]
-            elif lst[idx] < 1 and ref >= 1:
-                crosses.append(idx)
-                ref = lst[idx]
-    if ref.shape[1] == 2:
-        for idx in range(len(lst)):
-            if np.all(lst[idx] == [1, 0]).all() and np.all(ref == [0, 1]).all():
-                crosses.append(idx)
-                ref = lst[idx]
-            elif np.all(lst[idx] == [0, 1]).all() and np.all(ref == [1, 0]).all():
-                crosses.append(idx)
-                ref = lst[idx]
-    if ref.shape[1] == 3:
-        for idx in range(len(lst)):
-            if np.all(lst[idx] == [1, 0, 0]).all() and np.all(ref == [0, 1, 0]).all():
-                crosses.append(idx)
-                ref = lst[idx]
-            elif np.all(lst[idx] == [0, 1, 0]).all() and np.all(ref == [1, 0, 0]).all():
-                crosses.append(idx)
-                ref = lst[idx]
-    return crosses, lst[0]
+def change_points(lst):
+    change_points = []
+    for i in range(1, len(lst)):
+        if lst[i] != lst[i-1]:
+            change_points.append(i)
+    return change_points
 
 
 def confusion_matrix_logic(label, prediction, confusion_matrix):
     if label > 1:
-        if (prediction > 1).any() or np.all(prediction == [1, 0, 0]).all() or np.all(prediction == [1, 0]).all():
+        if prediction == 'buy':
             confusion_matrix['TP'] += 1
         else:
             confusion_matrix['FN'] += 1
     else:
-        if (prediction > 1).any() or np.all(prediction == [1, 0, 0]).all() or np.all(prediction == [1, 0]).all():
+        if prediction == 'buy':
             confusion_matrix['FP'] += 1
         else:
             confusion_matrix['TN'] += 1

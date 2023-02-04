@@ -1,34 +1,47 @@
-import json
-import os
-
-import numpy as np
 import pandas as pd
+import os
+import json
 
-from evaluate_model import confusion_matrix_logic, plot_data
 
-folder = 'generated_data/3d_data'
-n_files = len(os.listdir(folder)) / 2
-counter = 0
-predictions = []
-confusion_matrix = {'TP': 0, 'TN': 0, 'FP': 0, 'FN': 0}
+cols = ['btc','accuracy_x', 'buy_acc', 'sell_acc', 'hold_acc', 'feature', 'period',
+        'n_layers', 'output', 'output_nodes',
+       'batch_size', 'optimizer', 'normaliser',
+        'TP', 'TN', 'FP', 'FN', 'precision', 'NPV', 'sensitivity',
+       'specificity', 'accuracy_y', 'file_name']
 
-while counter < n_files:
-    sample = pd.read_csv(f'generated_data/3d_data/sample{counter}.csv')
-    label = pd.read_csv(f'generated_data/3d_data/label{counter}.csv').values[0][1]
+def create_data_frame_from_folders(folder_path):
+    data_list = []
+    for filename in os.listdir(folder_path):
+        if filename.endswith('.json'):
+            file_path = os.path.join(folder_path, filename)
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+                try:
+                    data['file_name'] = filename
+                    data_list.append(data)
+                except:
+                    pass
+    return  pd.DataFrame(data_list)
 
-    output = np.array([[0, 1]]) if counter%50 else np.array([[1, 0]])
-    if output.shape[1] > 1:
-        index_of_max = np.argmax(output)
-        prediction = np.zeros(output.shape)
-        prediction[0, index_of_max] = 1
-        predictions.append(prediction)
-    else:
-        predictions.append(output)
-        prediction = output
+trial_df = create_data_frame_from_folders('generated_data/trials')
+confusion_df = create_data_frame_from_folders('generated_data/confusion_matrix')
+metric_df = create_data_frame_from_folders('generated_data/metrics')
+trial_df = trial_df.merge(confusion_df, on='file_name', how='outer').merge(metric_df, on='file_name', how='outer')
 
-    confusion_matrix = confusion_matrix_logic(label, prediction, confusion_matrix)
-    counter += 1
+trial_df = trial_df[cols]
 
-trial = 10000
-btc = plot_data(predictions, trial)
-print(btc)
+# Define the condition to create the mask
+condition = trial_df['btc'] != 1
+# Create the mask
+mask = condition
+# Use the mask to index into the dataframe
+converged = trial_df[mask]
+
+# Define the condition to create the mask
+condition = trial_df['btc'] == 1
+# Create the mask
+mask = condition
+# Use the mask to index into the dataframe
+not_converged = trial_df[mask]
+
+a=1
