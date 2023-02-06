@@ -10,7 +10,8 @@ from evaluate_model import test_model_on_target, test_model_on_target_lin, saved
 import tensorflow as tf
 import warnings
 import threading
-from telegram import telegram_thread
+from apis import telegram_thread, Gdrive
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -30,8 +31,9 @@ data, target, kline_interval, normaliser = generate_features(output, output_node
 features = data.columns
 best_sofar = 0
 init = False
-trial = saved_trial_parameters_so_far()
-h_layer_range = 6
+drive = Gdrive()
+trial = 0
+h_layer_range = 10
 
 epsilon_parameters = {'btc': [],
                       'recurrent2': [],
@@ -81,19 +83,19 @@ while 1:
     percentage = random_float(0.1, 0.9) if random_float(0, 1)>0.2 else recommend('percentage', epsilon_parameters) if init else 0.5
     l1f = random_float(0, 0.2) if random_float(0, 1)>0.2 else recommend(f'l1_{0}', epsilon_parameters) if init else 0.2
     neurons1 = random_int(100, 600) if random_float(0, 1)>0.2 else recommend(f'neurons_{0}', epsilon_parameters) if init else 30
-    n_layers = random_int(2,h_layer_range) if init else 1
+    n_layers = random_int(2,h_layer_range)
     batch_size = random_int(8, 128) if init else 64
     activation1 = ['lstm', 'bi-lstm', 'gru'][random_int(0, 2)]
     activation = rand_activation()
 
     '''Overwriters'''
-    l1f = 0
+    l1f = random_float(0.1, 0.3)
     feature = 'None'
-    learning_rate = 'None'
-    dropout = 0
-    neurons = 500
-    neurons1 = 400
-    activation = ['relu', 'sigmoid', 'tanh'][random_int(0, 2)]
+    learning_rate = random_float(0.01, 0.001)
+    dropout = random_float(0.1, 0.3)
+    neurons = random_int(60, 200)
+    neurons1 = neurons
+    activation = rand_activation()
 
     data, target, kline_interval, normaliser = generate_features(output, output_nodes)
     data = data.drop(labels=feature, axis=1) if feature != 'None' else data
@@ -112,6 +114,8 @@ while 1:
     for i in range(n_layers):
         #neurons = random_int(30,700)
         #dropout = random_float(0, 0.4)
+        dropout *= 1.1
+        l1f *= 1.1
 
         model.add(hidden_layer(activation, l1f, neurons))
         model.add(Dropout(dropout))
@@ -131,13 +135,13 @@ while 1:
     metric = ['val_loss']
 
     optimizer, str_opt = rand_optimizer(selection=('Rand'))
-    early_stop = tf.keras.callbacks.EarlyStopping(monitor=metric[0], patience=5)
-    #lr_schedule = tf.keras.callbacks.LearningRateScheduler(lambda epoch: learning / (1 + epoch * 0.02))
+    early_stop = tf.keras.callbacks.EarlyStopping(monitor=metric[0], patience=3)
+    lr_schedule = tf.keras.callbacks.LearningRateScheduler(lambda epoch: learning_rate / (1 + epoch * 0.02))
     #lr_schedule = tf.keras.callbacks.LearningRateScheduler(lambda epoch: 0.9)
 
     print('Training')
     model.compile(loss=loss, optimizer=optimizer)
-    model.fit(X_train, y_train, verbose=0, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=[early_stop])
+    model.fit(X_train, y_train, verbose=1, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test), callbacks=[early_stop])
     print('Trained')
 
     if output == 'softmax':
@@ -166,7 +170,7 @@ while 1:
     trial += 1
     best_sofar = max(epsilon_parameters['accuracy'][-1], best_sofar)
 
-    btc = test_model_on_last_months_data(model, trial)
+    btc = test_model_on_last_months_data(model, trial, drive)
 
     print(f'trial :{trial}')
     #print(f'accuracies buy: {buy_dict} sell: {sell_dict} hold: {hold_dict} all: {acc_dict}')
@@ -188,7 +192,7 @@ while 1:
     epsilon_parameters[f'activation_{0}'].append(activation1)
     epsilon_parameters[f'dropout_{0}'].append(0)
     epsilon_parameters['n_layers'].append(n_layers)
-    #epsilon_parameters['config'].append(model.get_config())
+    epsilon_parameters['config'].append(model.get_config())
     epsilon_parameters['batch_size'].append(batch_size)
     epsilon_parameters['optimizer'].append(str_opt)
     epsilon_parameters['buy_acc'].append(buy_dict)
@@ -220,13 +224,9 @@ while 1:
         trial_parameters[f'trial{trial}'][f'dropout_{i}'] = epsilon_parameters[f'dropout_{i}'][-1]
 
 
-    # Open a file to write the JSON data to
-    with open(f'generated_data/trials/trial{trial}.json', 'w') as outfile:
-      # Use the json.dump() method to write the dictionary to the file
-      json.dump(trial_parameters[f'trial{trial}'], outfile)
-    with open(f'generated_data/feature_tester.json', 'w') as outfile:
-      # Use the json.dump() method to write the dictionary to the file
-      json.dump(trial_parameters, outfile)
+    drive.push_data_to_gdrive(trial_parameters[f'trial{trial}'], f'trial{trial}.json')
+    #drive.push_data_to_gdrive(trial_parameters, f'feature_tester.json')
+
 
     #if not init:
     #    telegram_thread = threading.Thread(target=telegram_thread)

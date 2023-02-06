@@ -73,7 +73,7 @@ def saved_trial_parameters_so_far():
     return len(files)
 
 
-def test_model_on_last_months_data(model, trial):
+def test_model_on_last_months_data(model, trial, drive):
     folder = 'generated_data/3d_data'
     n_files = len(os.listdir(folder)) / 2
     counter = 0
@@ -83,7 +83,7 @@ def test_model_on_last_months_data(model, trial):
     while counter < n_files:
         sample = pd.read_csv(f'generated_data/3d_data/sample{counter}.csv')
         label = pd.read_csv(f'generated_data/3d_data/label{counter}.csv').values[0][1]
-
+        sample = sample.drop('Unnamed: 0', axis=1)
         output = model.predict(sample.values.reshape(1, sample.shape[0], sample.shape[1]), verbose=0)
         if output.shape[1] > 1:
             index_of_max = np.argmax(output)
@@ -103,16 +103,13 @@ def test_model_on_last_months_data(model, trial):
         confusion_matrix = confusion_matrix_logic(label, prediction, confusion_matrix)
         counter += 1
 
-    with open(f'generated_data/confusion_matrix/trial{trial}.json', 'w') as outfile:
-        # Use the json.dump() method to write the dictionary to the file
-        json.dump(confusion_matrix, outfile)
+    drive.push_data_to_gdrive(confusion_matrix, f'confusion_matrix{trial}.json')
 
     precision, NPV, sensitivity, specificity, accuracy = get_confusion_matrix_metrics(confusion_matrix)
     confusion_matrix = {'precision': precision, 'NPV': NPV, 'sensitivity': sensitivity, 'specificity': specificity,
                         'accuracy': accuracy}
-    with open(f'generated_data/metrics/trial{trial}.json', 'w') as outfile:
-        # Use the json.dump() method to write the dictionary to the file
-        json.dump(confusion_matrix, outfile)
+
+    drive.push_data_to_gdrive(confusion_matrix, f'metrics{trial}.json')
 
     btc = plot_data(predictions, trial)
     return btc
@@ -163,7 +160,7 @@ def calculate_btc_after_test_period(idx, ref, y2):
 
         ref = False if ref else True
 
-    return btc if btc else dollars / dollar_val
+    return btc if btc else dollar_val / dollars
 
 
 def get_data_at_cross_over_points(x, y, indexs):

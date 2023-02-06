@@ -1,47 +1,34 @@
-import pandas as pd
+from pydrive.auth import GoogleAuth
+from pydrive.drive import GoogleDrive
 import os
 import json
 
+gauth = GoogleAuth()
+gauth.LoadCredentialsFile("mycreds.txt")
+drive = GoogleDrive(gauth)
 
-cols = ['btc','accuracy_x', 'buy_acc', 'sell_acc', 'hold_acc', 'feature', 'period',
-        'n_layers', 'output', 'output_nodes',
-       'batch_size', 'optimizer', 'normaliser',
-        'TP', 'TN', 'FP', 'FN', 'precision', 'NPV', 'sensitivity',
-       'specificity', 'accuracy_y', 'file_name']
+data = {
+    "example_key": "example_value"
+}
 
-def create_data_frame_from_folders(folder_path):
-    data_list = []
-    for filename in os.listdir(folder_path):
-        if filename.endswith('.json'):
-            file_path = os.path.join(folder_path, filename)
-            with open(file_path, 'r') as f:
-                data = json.load(f)
-                try:
-                    data['file_name'] = filename
-                    data_list.append(data)
-                except:
-                    pass
-    return  pd.DataFrame(data_list)
 
-trial_df = create_data_frame_from_folders('generated_data/trials')
-confusion_df = create_data_frame_from_folders('generated_data/confusion_matrix')
-metric_df = create_data_frame_from_folders('generated_data/metrics')
-trial_df = trial_df.merge(confusion_df, on='file_name', how='outer').merge(metric_df, on='file_name', how='outer')
+def push_data_to_gdrive(data, file_name):
+    file = drive.CreateFile({'title': f'{file_name}'})
+    file.Upload()
 
-trial_df = trial_df[cols]
+    file.content_type = 'application/json'
+    file.SetContentString(json.dumps(data))
+    file.Upload()
+push_data_to_gdrive(data, f'trial{1}.json')
 
-# Define the condition to create the mask
-condition = trial_df['btc'] != 1
-# Create the mask
-mask = condition
-# Use the mask to index into the dataframe
-converged = trial_df[mask]
+'''
+drive.push_data_to_gdrive(confusion_matrix, 'generated_data/confusion_matrix', f'trial{trial}.json')
 
-# Define the condition to create the mask
-condition = trial_df['btc'] == 1
-# Create the mask
-mask = condition
-# Use the mask to index into the dataframe
-not_converged = trial_df[mask]
+def push_data_to_gdrive(self, data, parent, file_name):
+    file = self.drive.CreateFile({'title': f'{file_name}', 'parents': [{'id': parent}]})
+    file.Upload()
 
-a=1
+    file.content_type = 'application/json'
+    file.SetContentString(json.dumps(data))
+    file.Upload()
+'''

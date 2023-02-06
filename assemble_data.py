@@ -9,22 +9,24 @@ from Feature_testing import set_label, scale_data, set_label2
 
 
 def get_bitcoin_data():
+
+    intervals = [Client.KLINE_INTERVAL_4HOUR,
+                 Client.KLINE_INTERVAL_6HOUR,
+                 Client.KLINE_INTERVAL_8HOUR,
+                 Client.KLINE_INTERVAL_12HOUR,
+                 Client.KLINE_INTERVAL_1DAY]
+    interval = intervals[random.randint(0, len(intervals) - 1)]
+
     # Create a client instance
     try:
         client = Client("api_key", "api_secret")
 
-        intervals = [Client.KLINE_INTERVAL_4HOUR,
-                     Client.KLINE_INTERVAL_6HOUR,
-                     Client.KLINE_INTERVAL_8HOUR,
-                     Client.KLINE_INTERVAL_12HOUR,
-                     Client.KLINE_INTERVAL_1DAY]
-        interval = intervals[random.randint(0, len(intervals)-1)]
         print(f'intervals {interval}')
         # Retrieve the data
-        klines = client.get_historical_klines("BTCUSDT", interval, "1 Jan, 2017", limit=np.inf)
+        klines = client.get_historical_klines("BTCUSDT", interval, "1 Jan, 2017")
 
         # Open a CSV file for writing
-        with open("generated_data/bitcoin_data.csv", "w", newline="") as file:
+        with open(f"generated_data/bitcoin_data{interval}.csv", "w", newline="") as file:
             # Create a CSV writer
             writer = csv.writer(file)
 
@@ -37,11 +39,11 @@ def get_bitcoin_data():
                 writer.writerow(kline)
         return interval
     except:
-        return 0
+        return interval
 
-def populate_indicators():
+def populate_indicators(interval):
 
-    dataframe = pd.read_csv('generated_data/bitcoin_data.csv')
+    dataframe = pd.read_csv(f'generated_data/bitcoin_data{interval}.csv')
     # Convert the data to a DataFrame
     keep_columns = ["timestamp", "open", "high", "low", "close", "volume", "num_trades"]
     dataframe = dataframe.drop([col for col in dataframe.columns if col not in keep_columns], axis=1)
@@ -146,7 +148,7 @@ def populate_indicators():
 
 def generate_features(output, output_nodes):
     kline_interval = get_bitcoin_data()
-    df = populate_indicators()
+    df = populate_indicators(kline_interval)
 
     n_samples_for_testing = calculate_samples_per_month(df['timestamp'][0], df['timestamp'][1])
     df[-n_samples_for_testing:].to_csv("generated_data/last_month_raw_data.csv", index=False)
